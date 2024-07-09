@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Inversion</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Audio Inversion</h1>
+    
+    <div id="record-controls">
+        <button class="button" onclick="startRecording()">Start Recording</button>
+        <button class="button" onclick="stopRecording()">Stop Recording</button>
+    </div>
+    
+    <form id="upload-form">
+        <input type="file" id="audio-file" accept="audio/wav, audio/mp3" class="button">
+        <button type="button" class="button" onclick="uploadAudio()">Upload Audio</button>
+    </form>
+    
+    <h2>Inverted Audio</h2>
+    <audio id="inverted-audio" controls></audio>
+    
+    <div id="charts">
+        <canvas id="originalChart"></canvas>
+        <canvas id="invertedChart"></canvas>
+    </div>
+    
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.start();
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    audioChunks = [];
+                    uploadAudioBlob(audioBlob);
+                };
+            }).catch(error => {
+                console.error('Error accessing media devices.', error);
+            });
+        }
+        
+        function stopRecording() {
+            if (mediaRecorder) {
+                mediaRecorder.stop();
+            }
+        }
+        
+        function uploadAudio() {
+            const audioFile = document.getElementById('audio-file').files[0];
+            if (audioFile) {
+                const formData = new FormData();
+                formData.append('audio', audioFile);
+                fetch('{{ url_for("upload_file") }}', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const invertedBlob = new Blob([new Uint8Array(atob(data.inverted_audio).split('').map(c => c.charCodeAt(0)))], { type: 'audio/wav' });
+                    const invertedUrl = URL.createObjectURL(invertedBlob);
+                    document.getElementById('inverted-audio').src = invertedUrl;
+                    plotWaveforms(data.original_samples, data.inverted_samples);
+                })
+                .catch(error => {
+                    console.error('Error uploading audio file:', error);
+                });
+            }
+        }
+        
+        function uploadAudioBlob(audioBlob) {
+            const formData = new FormData();
+            formData.append('audio', audioBlob);
+            fetch('{{ url_for("upload_file") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                const invertedBlob = new Blob([new Uint8Array(atob(data.inverted_audio).split('').map(c => c.charCodeAt(0)))], { type: 'audio/wav' });
+                const invertedUrl = URL.createObjectURL(invertedBlob);
+                document.getElementById('inverted-audio').src = invertedUrl;
+                plotWaveforms(data.original_samples, data.inverted_samples);
+            })
+            .catch(error => {
+                console.error('Error uploading audio blob:', error);
+            });
+        }
+        
+        function plotWaveforms(originalSamples, invertedSamples) {
+            const ctxOriginal = document.getElementById('originalChart').getContext('2d');
+            const ctxInverted = document.getElementById('invertedChart').getContext('2d');
+            
+            const labels = originalSamples.map((_, i) => i);
+            
+            new Chart(ctxOriginal, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Original Waveform',
+                        data: originalSamples,
+                        borderColor: 'blue',
+                        fill: false
+                    }]
+                }
+            });
+            
+            new Chart(ctxInverted, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Inverted Waveform',
+                        data: invertedSamples,
+                        borderColor: 'red',
+                        fill: false
+                    }]
+                }
+            });
+        }
+    </script>
+</body>
+</html>
