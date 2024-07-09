@@ -25,7 +25,7 @@ This project is a web application that allows users to record audio or upload au
 1. **Clone the repository:**
 
    ```bash
-   git clone https://github.com/yourusername/audio-inversion-webapp.git
+   git clone https://github.com/SOISVerieth/audio-inversion-webapp.git
    cd audio-inversion-webapp
    ```
 
